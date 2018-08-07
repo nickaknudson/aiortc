@@ -2,7 +2,8 @@ import argparse
 import asyncio
 import logging
 
-from aiortc import RTCPeerConnection
+from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc.sdp import SessionDescription
 from aiortc.contrib.signaling import add_signaling_arguments, create_signaling
 
 
@@ -40,10 +41,19 @@ async def run_answer(pc, signaling):
             channel.send(message)
 
             # quit
-            done.set()
+            #done.set()
 
     # receive offer
     offer = await signaling.receive()
+    parsed = SessionDescription.parse(offer.sdp)
+    print(parsed)
+    print(parsed.media)
+    for media in parsed.media:
+        ice_candidates = []
+        for ice_candidate in media.ice_candidates:
+            if ice_candidate.ip == media.host:
+                ice_candidates.append(ice_candidate)
+        media.ice_candidates = ice_candidates
     await pc.setRemoteDescription(offer)
 
     # send answer
@@ -62,12 +72,25 @@ async def run_offer(pc, signaling):
 
     @channel.on('message')
     def on_message(message):
+        message = 'ping'
+        channel.send(message)
         # quit
-        done.set()
+        # done.set()
 
     # send offer
     await pc.setLocalDescription(await pc.createOffer())
-    await signaling.send(pc.localDescription)
+    parsed = SessionDescription.parse(pc.localDescription.sdp)
+    print(parsed)
+    print(parsed.media)
+    for media in parsed.media:
+        ice_candidates = []
+        for ice_candidate in media.ice_candidates:
+            if ice_candidate.ip == media.host:
+                ice_candidates.append(ice_candidate)
+        media.ice_candidates = ice_candidates
+    sdp = RTCSessionDescription(sdp=str(parsed), type="offer")
+    print(sdp)
+    await signaling.send(sdp)
 
     # receive answer
     answer = await signaling.receive()
